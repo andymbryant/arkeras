@@ -8,6 +8,20 @@ import random
 from pygame.surfarray import array3d
 from pygame import display
 from src.lib.vars import BLACK, WHITE, GREEN
+from src.games.snake.vars import (
+    ACTION_TO_DIRECTION_MAP,
+    DEFAULT_DIRECTION,
+    DEFAULT_SNAKE_LENGTH,
+    DIRECTION_TO_OPPOSITE_MAP,
+    DOWN,
+    GAME_UNIT_SIZE,
+    LEFT,
+    REWARD_HIGH,
+    REWARD_LOW,
+    REWARD_NEUTRAL,
+    RIGHT,
+    UP,
+)
 
 class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -18,104 +32,89 @@ class SnakeEnv(gym.Env):
         self.frame_size_y = 200
         self.game_window = pygame.display.set_mode(
             (self.frame_size_x, self.frame_size_y))
-        self.reset()
         self.name = 'snake'
+        self.reset()
 
     def step(self, action):
-        reward = 0
-        self.direction = SnakeEnv.change_direction(action, self.direction)
-        self.snake_pos = SnakeEnv.move(self.direction, self.snake_pos)
-        self.snake_body.insert(0, list(self.snake_pos))
-        reward = self.food_handler()
-        self.update_game_state()
-        reward, done = self.game_over(reward)
+        self.steps += 1
+        reward, done = self.is_game_over()
+        if not done:
+            self.change_direction(action)
+            self.make_move()
+            reward = self.food_handler()
+        self.redraw()
         img = self.get_image_array_from_game()
         info = {"score": self.score}
-        self.steps += 1
         return img, reward, done, info
 
-    @staticmethod
-    def change_direction(action, direction):
-        if action == 0 and direction != "DOWN":
-            direction = 'UP'
-        if action == 1 and direction != "UP":
-            direction = 'DOWN'
-        if action == 2 and direction != "RIGHT":
-            direction = 'LEFT'
-        if action == 3 and direction != "LEFT":
-            direction = 'RIGHT'
-        return direction
+    def change_direction(self, action):
+        new_direction = ACTION_TO_DIRECTION_MAP.get(action)
+        # If new_direction is opposite of current direction, new_direction is illegal
+        if DIRECTION_TO_OPPOSITE_MAP.get(new_direction) != self.direction:
+            self.direction = new_direction
 
-    @staticmethod
-    def move(direction, snake_pos):
-        if direction == 'UP':
-            snake_pos[1] -= 10
-        if direction == 'DOWN':
-            snake_pos[1] += 10
-        if direction == 'LEFT':
-            snake_pos[0] -= 10
-        if direction == 'RIGHT':
-            snake_pos[0] += 10
-        return snake_pos
+    def make_move(self):
+        if self.direction == UP:
+            self.snake_pos[1] -= GAME_UNIT_SIZE
+        elif self.direction == DOWN:
+            self.snake_pos[1] += GAME_UNIT_SIZE
+        elif self.direction == LEFT:
+            self.snake_pos[0] -= GAME_UNIT_SIZE
+        elif self.direction == RIGHT:
+            self.snake_pos[0] += GAME_UNIT_SIZE
+        self.snake_body.insert(0, list(self.snake_pos))
 
-    def eat(self):
+    def did_eat_food(self):
         return self.snake_pos[0] == self.food_pos[0] and self.snake_pos[1] == self.food_pos[1]
 
     def spawn_food(self):
-        return [random.randrange(1, (self.frame_size_x//10)) * 10, random.randrange(1, (self.frame_size_y//10)) * 10]
+        return [random.randrange(1, (self.frame_size_x//GAME_UNIT_SIZE)) * GAME_UNIT_SIZE, random.randrange(1, (self.frame_size_y//GAME_UNIT_SIZE)) * GAME_UNIT_SIZE]
 
     def food_handler(self):
-        if self.eat():
+        if self.did_eat_food():
             self.score += 1
-            reward = 1
-            self.food_spawn = False
+            reward = REWARD_HIGH
+            self.food_pos = self.spawn_food()
         else:
             self.snake_body.pop()
-            reward = 0
-
-        if not self.food_spawn:
-            self.food_pos = self.spawn_food()
-        self.food_spawn = True
-
+            reward = REWARD_NEUTRAL
         return reward
 
-    def update_game_state(self):
+    def redraw(self):
         self.game_window.fill(BLACK)
-        for pos in self.snake_body:
+        for x, y in self.snake_body:
             pygame.draw.rect(self.game_window, GREEN,
-                             pygame.Rect(pos[0], pos[1], 10, 10))
+                             pygame.Rect(x, y, GAME_UNIT_SIZE, GAME_UNIT_SIZE))
 
         pygame.draw.rect(self.game_window, WHITE, pygame.Rect(
-            self.food_pos[0], self.food_pos[1], 10, 10))
+            self.food_pos[0], self.food_pos[1], GAME_UNIT_SIZE, GAME_UNIT_SIZE))
 
     def get_image_array_from_game(self):
         img = array3d(display.get_surface())
         img = np.swapaxes(img, 0, 1)
         return img
 
-    def game_over(self, reward):
-        if self.snake_pos[0] < 0 or self.snake_pos[0] > self.frame_size_x-10:
-            return -1, True
-        if self.snake_pos[1] < 0 or self.snake_pos[1] > self.frame_size_y-10:
-            return -1, True
-
+    def is_game_over(self):
+        if self.score == 100:
+            return REWARD_HIGH, True
+        if self.steps == 1000:
+            return REWARD_LOW, True
+        if self.snake_pos[0] < 0 or self.snake_pos[0] > self.frame_size_x - GAME_UNIT_SIZE:
+            return REWARD_LOW, True
+        if self.snake_pos[1] < 0 or self.snake_pos[1] > self.frame_size_y - GAME_UNIT_SIZE:
+            return REWARD_LOW, True
         for block in self.snake_body[1:]:
             if self.snake_pos[0] == block[0] and self.snake_pos[1] == block[1]:
-                return -1, True
-        if self.steps >= 1000:
-            return 0, True
-
-        return reward, False
+                return REWARD_LOW, True
+        return REWARD_NEUTRAL, False
 
     def reset(self):
         self.game_window.fill(BLACK)
         self.snake_pos = [100, 50]
-        self.snake_body = [[100, 50], [100-10, 50], [100-(2*10), 50]]
+        self.snake_body = [[self.snake_pos[0] - (GAME_UNIT_SIZE * i), self.snake_pos[1]] for i, _ in enumerate(range(DEFAULT_SNAKE_LENGTH))]
         self.food_pos = self.spawn_food()
-        self.food_spawn = True
 
-        self.direction = "RIGHT"
-        self.change_to = self.direction
+        self.direction = DEFAULT_DIRECTION
         self.score = 0
         self.steps = 0
         return self.get_image_array_from_game()
@@ -123,7 +122,7 @@ class SnakeEnv(gym.Env):
     def render(self, mode='human'):
         if mode == "human":
             display.update()
-            time.sleep(0.1)
+            time.sleep(0.01)
 
     def close(self):
         pass

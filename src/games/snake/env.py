@@ -7,12 +7,7 @@ import pygame
 import random
 from pygame.surfarray import array3d
 from pygame import display
-
-BLACK = pygame.Color(0, 0, 0)
-WHITE = pygame.Color(255, 255, 255)
-RED = pygame.Color(255, 0, 0)
-GREEN = pygame.Color(0, 255, 0)
-BLUE = pygame.Color(0, 0, 255)
+from src.lib.vars import BLACK, WHITE, GREEN
 
 class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -53,7 +48,6 @@ class SnakeEnv(gym.Env):
 
     @staticmethod
     def move(direction, snake_pos):
-        time.sleep(0.01)
         if direction == 'UP':
             snake_pos[1] -= 10
         if direction == 'DOWN':
@@ -129,6 +123,7 @@ class SnakeEnv(gym.Env):
     def render(self, mode='human'):
         if mode == "human":
             display.update()
+            time.sleep(0.1)
 
     def close(self):
         pass

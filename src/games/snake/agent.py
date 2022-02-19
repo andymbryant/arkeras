@@ -1,12 +1,12 @@
-from env import SnakeEnv
+from src.games.snake.env import SnakeEnv
 from tensorflow.keras.optimizers import Adam
 import os
 import time
 from rl.agents.dqn import DQNAgent
 from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.memory import SequentialMemory
-from rl.callbacks import FileLogger, ModelIntervalCheckpoint
-from model import SnakeModel, ImageProcessor, get_model
+from src.games.snake.model import get_model
+from src.lib.helper import ImageProcessor
 import pathlib
 
 # current executing directory
@@ -23,7 +23,6 @@ env = SnakeEnv()
 nb_actions = env.action_space.n
 
 model = get_model(INPUT_SHAPE, nb_actions)
-# model = SnakeModel(input_shape, nb_actions)
 processor = ImageProcessor(IMG_SHAPE)
 nb_steps_policy = 1_000_000
 nb_steps_train = 2_000_000
@@ -69,6 +68,5 @@ if TRAIN:
     dqn.save_weights(weights_filename, overwrite=True)
 
 else:
-    # env.sleep = 1
     model.load_weights(WEIGHTS_FILEPATH)
     dqn.test(env, nb_episodes=1, visualize=True)
